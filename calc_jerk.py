@@ -13,7 +13,6 @@ import warnings
 import numpy as np
 
 
-
 def compute_jerks(data, dim=3):
     """Compute jerk between adjacent frames
 
@@ -101,114 +100,93 @@ def save_result(lines, out_dir, measure):
     with open(outname, 'w') as out_file:
         out_file.writelines(lines)
 
-    print('More detailed result was writen to the file: ' + outname)
-    print('')
 
+def evaluate_folder(cond_name, measure):
+    """
+    Calculate numerical measure for the coordinates in the given folder
+    Args:
+        cond_name:   name of the condition / folder to evaluate
+        measure:     measure to be used
 
-def main():
+    Returns:
+        nothing, prints out the metrics results
+
+    """
+
+    cond_dir = "data/" + cond_name + "/"
+
+    cond_files = sorted(glob.glob(os.path.join(cond_dir, '*.npy')))
+
+    # define possible measures
     measures = {
         'jerk': compute_jerks,
         'acceleration': compute_acceleration,
     }
 
+    # Check if error measure was correct
+    if measure not in measures:
+        raise ValueError('Unknown measure: \'{}\'. Choose from {}'
+                         ''.format(measure, list(measures.keys())))
+
+    predicted_out_lines = [','.join(['file']) + '\n']
+
+    predicted_errors = []
+    for predicted_file in cond_files:
+        predicted_coords = np.load(predicted_file)
+
+        # flatten the values
+        predicted_coords = np.reshape(predicted_coords, (predicted_coords.shape[0], -1))
+
+        predicted_error = measures[measure](predicted_coords)
+
+        predicted_errors.append(predicted_error)
+
+        basename = os.path.basename(predicted_file)
+        predicted_line = basename
+
+        for ov in predicted_error:
+            predicted_line += ',' + str(ov)
+
+        predicted_line += '\n'
+
+        predicted_out_lines.append(predicted_line)
+
+    predicted_average_line = 'Average'
+    predicted_avgs = np.mean(predicted_errors, axis=0)
+
+    predicted_samples = np.mean(predicted_errors, axis=1)
+
+    predicted_stds = np.std(predicted_samples, axis=0)
+
+    for oa in predicted_avgs:
+        predicted_average_line += ',' + str(oa)
+
+    predicted_out_lines.append(predicted_average_line)
+
+    predicted_out_dir = os.path.join("result", cond_name)
+
+    save_result(predicted_out_lines, predicted_out_dir, measure)
+
+    print('{:s}: {:.2f} +- {:.2F}'.format(cond_name, np.mean(predicted_errors), predicted_stds))
+
+
+if __name__ == '__main__':
+
     parser = argparse.ArgumentParser(
         description='Calculate prediction errors')
-    parser.add_argument('--original', '-o', default='GT',
-                        help='Original gesture directory')
-    parser.add_argument('--predicted', '-p', default='NoPCA',
+    parser.add_argument('--coords_dir', '-c', default='data',
                         help='Predicted gesture directory')
     parser.add_argument('--measure', '-m', default='acceleration',
                         help='Measure to calculate (jerk or acceleration)')
-    parser.add_argument('--out', default='result',
-                        help='Directory to output the result')
     args = parser.parse_args()
-
-    predicted_dir =  "data/" + args.predicted + "/" # os.path.join(args.predicted, args.gesture)
-    original_dir= "data/" + args.original  + "/"
-
-    original_files = sorted(glob.glob(os.path.join(original_dir, '*.npy')))
-    predicted_files = sorted(glob.glob(os.path.join(predicted_dir, '*.npy')))
-
-    # Check number of files
-    if len(original_files) != len(predicted_files):
-        warnings.warn('Inconsistent number of files : {} vs {}'
-                      ''.format(len(original_files), len(predicted_files)),
-                      RuntimeWarning)
-
-    # Check if error measure was correct
-    if args.measure not in measures:
-        raise ValueError('Unknown measure: \'{}\'. Choose from {}'
-                         ''.format(args.measure, list(measures.keys())))
-
-
-    original_out_lines = [','.join(['file']) + '\n']
-    predicted_out_lines = [','.join(['file']) + '\n']
-
-    original_values = []
-    predicted_values = []
-    for original_file, predicted_file in zip(original_files, predicted_files):
-        original = np.load(original_file)
-        predicted = np.load(predicted_file)
-
-        # flatten the values
-        original = np.reshape(original,(original.shape[0], -1))
-        predicted = np.reshape(predicted, (predicted.shape[0], -1))
-
-        if original.shape[0] != predicted.shape[0]:
-            # Cut them to the same length
-            length = min(original.shape[0], predicted.shape[0])
-            original = original[:length]
-            predicted = predicted[:length]
-
-        original_value = measures[args.measure](original)
-        predicted_value = measures[args.measure](predicted)
-
-        original_values.append(original_value)
-        predicted_values.append(predicted_value)
-
-        basename = os.path.basename(original_file)
-        original_line = basename
-        predicted_line = basename
-        for ov, pv in zip(original_value, predicted_value):
-            original_line += ',' + str(ov)
-            predicted_line += ',' + str(pv)
-        original_line += '\n'
-        predicted_line += '\n'
-
-        original_out_lines.append(original_line)
-        predicted_out_lines.append(predicted_line)
-
-    original_average_line = 'Average'
-    predicted_average_line = 'Average'
-    original_avgs = np.mean(original_values, axis=0)
-    predicted_avgs = np.mean(predicted_values, axis=0)
-
-    original_samples = np.mean(original_values, axis=1)
-    predicted_samples = np.mean(predicted_values, axis=1)
-
-    original_stds = np.std(original_samples, axis=0)
-    predicted_stds = np.std(predicted_samples, axis=0)
-
-    for oa, pa in zip(original_avgs, predicted_avgs):
-        original_average_line += ',' + str(oa)
-        predicted_average_line += ',' + str(pa)
-
-    original_out_lines.append(original_average_line)
-    predicted_out_lines.append(predicted_average_line)
-
-    original_out_dir = os.path.join(args.out, args.original)
-    predicted_out_dir = os.path.join(args.out, args.predicted)
-
-    save_result(original_out_lines, original_out_dir, args.measure)
-    save_result(predicted_out_lines, predicted_out_dir, args.measure)
 
     if args.measure == 'jerk':
         print('AJ:')
     elif args.measure == 'acceleration':
         print('AA:')
-    print('original: {:.2f} +- {:.2F}'.format(np.mean(original_values),  original_stds))
-    print('predicted: {:.2f} +- {:.2F}'.format(np.mean(predicted_values),  predicted_stds))
 
+    for cond_name in os.listdir(args.coords_dir):
+        evaluate_folder(cond_name, args.measure)
 
-if __name__ == '__main__':
-    main()
+    print('More detailed result was writen to the files in the "results" folder ')
+    print('')
