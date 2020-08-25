@@ -95,24 +95,98 @@ def save_result(lines, out_dir, width, measure):
     with open(outname, 'w') as out_file:
         out_file.writelines(lines)
 
-    print('More detailed result was writen to the file: ' + outname)
-    print('')
 
+def make_histogram(cond_name, measure, visualize = True, width = 1):
+    """
+    Calculate frequencies histogram for a given measure
+    Args:
+        cond_name:   name of the folder to consider
+        measure:     measure to be used
+        visualize:   flag if we want to visualize the result
+        width:       width of the histogram bins
 
-def main():
+    Returns:
+        Saved in the "results" folder
+
+    """
+
+    predicted_dir = "data/" + cond_name + "/"  # os.path.join(args.predicted, args.gesture)
+
     measures = {
         'velocity': compute_velocity,
         'acceleration': compute_acceleration,
     }
 
+    # Check if error measure was correct
+    if measure not in measures:
+        raise ValueError('Unknown measure: \'{}\'. Choose from {}'
+                         ''.format(measure, list(measures.keys())))
+
+    predicted_files = sorted(glob.glob(os.path.join(predicted_dir, '*.npy')))
+
+    predicted_out_lines = [','.join([''] + ['Total']) + '\n']
+
+    predicted_distances = []
+    for predicted_file in predicted_files:
+        # read the values and remove hips which are fixed
+        predicted = np.load(predicted_file)[:, 2:]
+
+        predicted_distance = measures[measure](
+            predicted)  # [:, selected_joints]
+
+        predicted_distances.append(predicted_distance)
+
+    predicted_distances = np.concatenate(predicted_distances)
+
+    # Compute histogram for each joint
+    bins = np.arange(0, 59 + width, width)
+    num_joints = predicted_distances.shape[1]
+    predicted_hists = []
+    for i in range(num_joints):
+        predicted_hist, _ = np.histogram(predicted_distances[:, i], bins=bins)
+
+        predicted_hists.append(predicted_hist)
+
+    # Sum over all joints
+    predicted_total = np.sum(predicted_hists, axis=0)
+
+    # Append total number of bin counts to the last
+    predicted_hists = np.stack(predicted_hists + [predicted_total], axis=1)
+
+    num_bins = bins.size - 1
+    for i in range(num_bins):
+        predicted_line = str(bins[i])
+        for j in range(num_joints + 1):
+            predicted_line += ',' + str(predicted_hists[i, j])
+        predicted_line += '\n'
+        predicted_out_lines.append(predicted_line)
+
+    predicted_out_dir  = "result/" + cond_name + "/"  # os.path.join(args.predicted, args.gesture)
+
+
+    if visualize:
+        sum = np.sum(predicted_total)
+        actual_freq = predicted_total / sum
+        plt.plot(bins[:-1], actual_freq, label=cond_name)
+        plt.legend()
+        plt.xlabel('Velocity (cm/s)')
+        plt.ylabel('Frequency')
+        plt.title('Frequencies of Moving Distance ({})'.format(measure))
+        plt.tight_layout()
+        plt.show()
+
+    save_result(predicted_out_lines, predicted_out_dir, width, measure)
+
+    print('HMD ({}):'.format(measure))
+    print('bins: {}'.format(bins))
+    print('predicted: {}'.format(predicted_total))
+
+def main():
+
     parser = argparse.ArgumentParser(
         description='Calculate histograms of moving distances')
-    parser.add_argument('--original', '-o', default='GT',
-                        help='Original gesture directory')
-    parser.add_argument('--predicted', '-p', default='NoAutoregression',
-                        help='Predicted gesture directory')
-    parser.add_argument('--gesture', '-g', #required=True,
-                        help='Directory storing predicted txt files')
+    parser.add_argument('--coords_dir', '-p', default='data',
+                        help='Predicted gestures directory')
     parser.add_argument('--width', '-w', type=float, default=1,
                         help='Bin width of the histogram')
     parser.add_argument('--measure', '-m', default='velocity',
@@ -125,107 +199,12 @@ def main():
                         help='Directory to output the result')
     args = parser.parse_args()
 
-    predicted_dir = "data/" + args.predicted + "/"  # os.path.join(args.predicted, args.gesture)
-    original_dir = "data/" + args.original + "/"
+    for cond_name in os.listdir(args.coords_dir):
+        print("\nConsider", cond_name)
+        make_histogram(cond_name, args.measure, args.visualize, args.width)
 
-    original_files = sorted(glob.glob(os.path.join(original_dir, '*.npy')))
-
-    predicted_files = sorted(glob.glob(os.path.join(predicted_dir, '*.npy')))
-
-    # Check number of files
-    if len(original_files) != len(predicted_files):
-        warnings.warn('Inconsistent number of files : {} vs {}'
-                      ''.format(len(original_files), len(predicted_files)),
-                      RuntimeWarning)
-
-    # Check if error measure was correct
-    if args.measure not in measures:
-        raise ValueError('Unknown measure: \'{}\'. Choose from {}'
-                         ''.format(args.measure, list(measures.keys())))
-
-    original_out_lines = [','.join([''] + ['Total']) + '\n']
-    predicted_out_lines = [','.join([''] + ['Total']) + '\n']
-
-    original_distances = []
-    predicted_distances = []
-    for original_file, predicted_file in zip(original_files, predicted_files):
-
-        # read the values and remove hips which are fixed
-        original = np.load(original_file)[:,2:]
-        predicted = np.load(predicted_file)[:,2:]
-
-        if original.shape[0] != predicted.shape[0]:
-            # Cut them to the same length
-            length = min(original.shape[0], predicted.shape[0])
-            original = original[:length]
-            predicted = predicted[:length]
-
-        original_distance = measures[args.measure](
-            original)#[:, selected_joints]
-        predicted_distance = measures[args.measure](
-            predicted)#[:, selected_joints]
-
-        original_distances.append(original_distance)
-        predicted_distances.append(predicted_distance)
-
-    original_distances = np.concatenate(original_distances)
-    predicted_distances = np.concatenate(predicted_distances)
-
-    # Compute histogram for each joint
-    bins = np.arange(0, 59+args.width, args.width)
-    num_joints = original_distances.shape[1]
-    original_hists = []
-    predicted_hists = []
-    for i in range(num_joints):
-        original_hist, _ = np.histogram(original_distances[:, i], bins=bins)
-        predicted_hist, _ = np.histogram(predicted_distances[:, i], bins=bins)
-
-        original_hists.append(original_hist)
-        predicted_hists.append(predicted_hist)
-
-    # Sum over all joints
-    original_total = np.sum(original_hists, axis=0)
-    predicted_total = np.sum(predicted_hists, axis=0)
-
-    # Append total number of bin counts to the last
-    original_hists = np.stack(original_hists + [original_total], axis=1)
-    predicted_hists = np.stack(predicted_hists + [predicted_total], axis=1)
-
-    num_bins = bins.size - 1
-    for i in range(num_bins):
-        original_line = str(bins[i])
-        predicted_line = str(bins[i])
-        for j in range(num_joints + 1):
-            original_line += ',' + str(original_hists[i, j])
-            predicted_line += ',' + str(predicted_hists[i, j])
-        original_line += '\n'
-        predicted_line += '\n'
-        original_out_lines.append(original_line)
-        predicted_out_lines.append(predicted_line)
-
-    original_out_dir = os.path.join(args.out, args.original)
-    predicted_out_dir = os.path.join(args.out, args.predicted)
-
-    if args.visualize:
-        plt.plot(bins[:-1], original_total, label=args.original)
-        plt.plot(bins[:-1], predicted_total, label=args.predicted)
-        plt.legend()
-        plt.xlabel('Velocity (cm/s)')
-        plt.ylabel('Bin counts')
-        plt.title('Histograms of Moving Distance ({})'.format(args.measure))
-        plt.tight_layout()
-        plt.show()
-
-    save_result(original_out_lines, original_out_dir,
-                args.width, args.measure)
-    save_result(predicted_out_lines, predicted_out_dir,
-                args.width, args.measure)
-
-    print('HMD ({}):'.format(args.measure))
-    print('bins: {}'.format(bins))
-    print('original: {}'.format(original_total))
-    print('predicted: {}'.format(predicted_total))
-
+    print('\nMore detailed result was writen to the files in the "results" folder ')
+    print('')
 
 if __name__ == '__main__':
     main()
