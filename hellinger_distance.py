@@ -52,12 +52,10 @@ def main():
         description='Calculate histograms of moving distances')
     parser.add_argument('--original', default='result/GT',
                         help='Original gesture directory')
-    parser.add_argument('--predicted', '-p', default='result/NoPCA',
+    parser.add_argument('--predicted', '-p', default='result/',
                         help='Predicted gesture directory')
     parser.add_argument('--file', '-f', default='hmd_vel_1.csv',
                         help='File name to load')
-    parser.add_argument('--joints', '-j', default='joints.txt',
-                        help='Joint name file')
     parser.add_argument('--select', '-s', nargs='+',
                         help='Joint subset to compute (if omitted, use all)')
     parser.add_argument('--visualize', '-v', action='store_true',
@@ -70,22 +68,30 @@ def main():
     def get_directories(directory):
         return sorted(filter(lambda x: os.path.isdir(x), glob.glob(directory)))
 
-    # Read original gesture's distribution
-    original_file = os.path.join(args.original, args.file)
-    original = pd.read_csv(original_file, index_col=0)
-    original_hist = np.array(original).sum(axis=1)
+    def get_histograms(data_dir, hist_file):
 
-    # List of predicted gesture direcotires
+        # Read original gesture's distribution
+        hist_path = os.path.join(data_dir, hist_file)
+        original_val = pd.read_csv(hist_path, header=None, skiprows=1)
+        original_array = np.array(original_val)
+
+        # Calculate histograms for wrists and normalize it
+        actual_hist = (original_array[:, -2] + original_array[:, -5]) / original_array[:, -1]
+
+        return actual_hist
+
+    original_hist = get_histograms(args.original, args.file)
+
+    # List of predicted gesture directories
     predicted_dirs = get_directories(os.path.join(args.predicted, '*'))
 
     results = {os.path.basename(d): None for d in predicted_dirs}
 
-    # Iterate over the list of direcotires
+    # Iterate over the list of directories
     for predicted_dir in predicted_dirs:
         # Does this directory have a target file?
         try:
-            predicted_file = os.path.join(predicted_dir, args.file)
-            predicted = pd.read_csv(predicted_file, index_col=0)
+            predicted_hist = get_histograms(predicted_dir, args.file)
         except FileNotFoundError:
             # Are there any subdirectories which have integer names?
             sub_dirs = sorted(
@@ -108,10 +114,7 @@ def main():
                 else:
                     predicted = predicted + tmp
                 
-            predicted = predicted / float(len(sub_dirs))
-
-        # Get histograms
-        predicted_hist = np.array(predicted).sum(axis=1)
+            predicted_hist = predicted / float(len(sub_dirs))
 
         assert len(original_hist) == len(predicted_hist)
 
@@ -150,13 +153,8 @@ def main():
         sns.set(context='poster', palette=sns.color_palette(mpl_default), font_scale=1.05)
         sns.set_style('white', {'legend.frameon':True})
 
-        # Velocities are computed in 20fps: make them into cm/s
-        index = original.index * 20
+        index = original_hist
         bins = [format(i, '.2f') for i in list(index)]
-
-        # Plot velocity in a range of [0, 15]
-        bins = bins[:-4]
-        original_hist = original_hist[:-4]
 
         fig = plt.figure(figsize=(8, 5))
         ax = fig.add_subplot(111)
@@ -175,13 +173,13 @@ def main():
         legend_dists = ['Hell. Dist.', '0'.center(16)]
 
         colors = ['C1', 'C3', 'C0', 'C2'] if len(keys) <= 4 else \
-                 ['C1', 'C0', 'C6', 'C7', 'C8', 'C9', 'C5', 'C2', 'C3']
+                 ['C1', 'C0', 'C6', 'C7', 'C8', 'C9', 'C5', 'C2', 'C3', 'C4']
         
         assert len(keys) <= len(colors)
 
         for color, key in zip(colors, keys):
             predicted_hist = results[key]['hist'][:-4]
-            label = key.split('-')[1].replace('_smooth', '*')
+            label = key
 
             if 'Aud2Pose' in label:
                 label += ' [14]'
