@@ -3,24 +3,43 @@ from scipy import stats
 import numpy as np
 
 
-def calculate_CCA(input_array_one, input_array_two):
+def find_CCA_scaling_vectors(input_array_one, input_array_two):
+    """
+        Calculate CCA (Canonical Correlation Analysis) scaling vectors
+        Args:
+            input_array_one: the first input array [T,D]
+            input_array_two: the second input array [T,D]
+
+        Returns:
+            a, b: scaling vectors for the CCA transformation
+
+        """
+
+    # Define CCA model which considers the first CCA coefficient only
+    cca_model = CCA(n_components=1)
+    # Fit CCA model to the given data
+    cca_model.fit(input_array_one, input_array_two)
+    # Encode the given arrays into 1D space using the CCA linear transform
+
+    return cca_model
+
+
+
+def calculate_CCA_score(CCA_model, input_array_one, input_array_two):
     """
     Calculate CCA (Canonical Correlation Analysis) coefficient
     Args:
         input_array_one: the first input array [T,D]
         input_array_two: the second input array [T,D]
+        CCA_model:       learned CCA model with already defined "a" and "b" scaling vectors
 
     Returns:
         r:  Pearson Correlation Coefficient after CCA transformation (scalar)
 
     """
 
-    # Define CCA model which considers the first CCA coefficient only
-    cca = CCA(n_components=1)
-    # Fit CCA model to the given data
-    cca.fit(input_array_one, input_array_two)
     # Encode the given arrays into 1D space using the CCA linear transform
-    encoding_one, encoding_two = cca.transform(input_array_one, input_array_two)
+    encoding_one, encoding_two = CCA_model.transform(input_array_one, input_array_two)
 
     # Standartize arrays shape: make it np.array of floats and remove any dummy dimensions
     encoding_one = np.array(encoding_one, dtype='float64').squeeze()
@@ -43,10 +62,15 @@ if __name__ == '__main__':
     #X = [[1], [2], [3], [4], [1], [2], [3], [4], [1], [2], [3], [4], [1], [2], [3], [4]]
     #Y = [[2], [2], [2.01], [2.01], [2], [2], [2.01], [2.01], [2], [2], [2.01], [2.01], [2], [2], [2.01], [2.01]]
 
-    n = 10000
-    X = np.random.randint(1,11,(n,20))
-    Y = X*2 + 7 + np.random.randint(0,15,(n,20))
+    n = 200
+    X = np.random.randint(1,11,(n,1))
+    Y = np.random.randint(0,15,(n,1)) + X*0.5 + 7
 
-    corr = calculate_CCA(X,Y)
+    CCA_model = find_CCA_scaling_vectors(X,Y)
+
+    corr = calculate_CCA_score(CCA_model, X,Y)
 
     print("CCA is : ", corr)
+
+    r, p = stats.pearsonr(X.squeeze(), Y.squeeze())
+    print("R      : ", r)
