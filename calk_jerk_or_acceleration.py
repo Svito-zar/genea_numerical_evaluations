@@ -177,11 +177,16 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
         description='Calculate prediction errors')
-    parser.add_argument('--coords_dir', '-c', default='/home/tarask/Documents/GENEA/3D_coords/',
+    parser.add_argument('--coords_dir', '-c', default='data',
                         help='Predicted gesture directory')
     parser.add_argument('--measure', '-m', default='acceleration',
                         help='Measure to calculate (jerk or acceleration)')
     args = parser.parse_args()
+
+    # Make sure that data is stored in the correct folder
+    if not os.listdir(args.coords_dir):
+        print("--coords_dir argument is wrong. there is no data at the folder '", args.coords_dir, "'")
+        exit(-1)
 
     if args.measure == 'jerk':
         print('AJ:')
