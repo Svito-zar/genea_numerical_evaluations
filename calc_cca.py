@@ -10,7 +10,7 @@ import glob
 import os
 import numpy as np
 
-from cca import find_CCA_scaling_vectors, calculate_CCA_score
+from cca import calculate_CCA_score
 
 
 def shorten(arr_one, arr_two):
@@ -92,53 +92,10 @@ def evaluate_folder(cond_name, coords_dir):
             all_predicted_frames = predicted_coords
             all_ground_tr_frames = original_coords
 
-    # find the CCA model
-    CCA_model = find_CCA_scaling_vectors(all_predicted_frames, all_ground_tr_frames)
+    # calculate Global CCA value
+    global_cca_value = calculate_CCA_score(all_predicted_frames, all_ground_tr_frames)
 
-    predicted_out_lines = [','.join(['file']) + '\n']
-
-    predicted_errors = []
-    for predicted_file, gt_file in zip(generated_files, gt_files):
-
-        # read and flatten the predicted values
-        predicted_coords = np.load(predicted_file)
-        predicted_coords = np.reshape(predicted_coords, (predicted_coords.shape[0], -1))
-
-        # read and flatten the ground truth values
-        original_coords = np.load(gt_file)
-        original_coords = np.reshape(original_coords, (original_coords.shape[0], -1))
-
-        # make sure sequences have the same length
-        predicted_coords, original_coords = shorten(predicted_coords, original_coords)
-
-        # find the CCA model
-        CCA_model = find_CCA_scaling_vectors(original_coords, predicted_coords)
-
-        # calculate CCA value
-        current_cca_value = calculate_CCA_score(CCA_model, original_coords, predicted_coords)
-
-        predicted_errors.append(current_cca_value)
-
-        basename = os.path.basename(predicted_file)
-        predicted_line = basename
-
-        predicted_line += ',' + str(current_cca_value) + '\n'
-
-        predicted_out_lines.append(predicted_line)
-
-    predicted_average_line = 'Average'
-    error_avgs = np.mean(predicted_errors, axis=0)
-    error_stds = np.std(predicted_errors, axis=0)
-
-    predicted_average_line += ',' + str(error_avgs)
-
-    predicted_out_lines.append(predicted_average_line)
-
-    predicted_out_dir = os.path.join("result", cond_name)
-
-    save_result(predicted_out_lines, predicted_out_dir)
-
-    print('{:s}: {:.2f} +- {:.2F}'.format(cond_name, np.mean(predicted_errors), error_stds))
+    print('{:s} Global CCA value: {:.2f}'.format(cond_name, global_cca_value))
 
 
 if __name__ == '__main__':
@@ -157,9 +114,4 @@ if __name__ == '__main__':
     print('CCA:')
 
     for cond_name in os.listdir(args.coords_dir):
-        if cond_name == "GT":
-            continue
         evaluate_folder(cond_name, args.coords_dir)
-
-    print('More detailed result was writen to the files in the "result" folder ')
-    print('')

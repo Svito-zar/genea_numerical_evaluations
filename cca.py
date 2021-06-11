@@ -25,25 +25,34 @@ def find_CCA_scaling_vectors(input_array_one, input_array_two):
 
 
 
-def calculate_CCA_score(CCA_model, input_array_one, input_array_two):
+def calculate_CCA_score(input_array_one, input_array_two):
     """
     Calculate CCA (Canonical Correlation Analysis) coefficient
     Args:
         input_array_one: the first input array [T,D]
         input_array_two: the second input array [T,D]
-        CCA_model:       learned CCA model with already defined "a" and "b" scaling vectors
 
     Returns:
         r:  Pearson Correlation Coefficient after CCA transformation (scalar)
 
     """
 
+    # Define CCA model which considers the first CCA coefficient only
+    CCA_model = CCA(n_components=1)
+
+    # Fit CCA model to the given data
+    CCA_model.fit(input_array_one, input_array_two)
+
     # Encode the given arrays into 1D space using the CCA linear transform
     encoding_one, encoding_two = CCA_model.transform(input_array_one, input_array_two)
 
-    # Standartize arrays shape: make it np.array of floats and remove any dummy dimensions
+    # Standartize arrays shape: make it np.array of floats, remove any dummy dimensions
     encoding_one = np.array(encoding_one, dtype='float64').squeeze()
     encoding_two = np.array(encoding_two, dtype='float64').squeeze()
+
+    # Bring from the order of e-12 to decent numbers
+    encoding_one = encoding_one * 1e10
+    encoding_two = encoding_two * 1e10
 
     # Calculate Pearson Correlation Coefficient (and p-value, which we don't use)
     r, p = stats.pearsonr(encoding_one, encoding_two)
