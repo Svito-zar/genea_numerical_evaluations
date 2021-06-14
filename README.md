@@ -7,6 +7,7 @@ This directory provides the scripts for quantitative evaluation of our gesture g
 - Average Jerk (AJ)
 - Histogram of Moving Distance (HMD) for velocity
 - Hellinger distance between histograms
+- Fréchet Gesture Distance
 
 
 
@@ -51,3 +52,6 @@ Note: `calc_distance.py` computes HMD for both original and predicted gestures. 
 Hellinger distance indicates how close two histograms are to each other.
 
 To calculate Hellinger distance, you can use `hellinger_distance.py` script.
+
+### Fréchet Gesture Distance
+Please see [README](FGD/README.md) in the FGD folder.
