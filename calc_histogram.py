@@ -2,7 +2,7 @@
 """
 Calculating statistics over the produced and ground truth gestures
 
-@author: kaneko.naoshi
+@author: Naoshi Kaneko and Taras Kucherenko
 """
 
 import argparse
@@ -37,12 +37,14 @@ def compute_velocity(data, dim=3):
 
     vel_norms = np.zeros((num_vels, num_joints))
 
+    # calculate vector norms
     for i in range(num_vels):
         for j in range(num_joints):
             x1 = j * dim + 0
             x2 = j * dim + dim
             vel_norms[i, j] = np.linalg.norm(vels[i, x1:x2])
 
+    # multiply on 20 to compensate for the time-frame being  0.05s
     return vel_norms * 20
 
 
@@ -65,12 +67,14 @@ def compute_acceleration(data, dim=3):
 
     acc_norms = np.zeros((num_accs, num_joints))
 
+    # calculate vector norms
     for i in range(num_accs):
         for j in range(num_joints):
             x1 = j * dim + 0
             x2 = j * dim + dim
             acc_norms[i, j] = np.linalg.norm(accs[i, x1:x2])
 
+    # multiply on 20 to compensate for the time-frame being  0.05s
     return acc_norms * 20 * 20
 
 
@@ -96,21 +100,23 @@ def save_result(lines, out_dir, width, measure):
         out_file.writelines(lines)
 
 
-def make_histogram(cond_name, measure, visualize = True, width = 1):
+def make_histogram(cond_name, measure, coord_dir, out_dir, visualize=True, width=1):
     """
     Calculate frequencies histogram for a given measure
     Args:
         cond_name:   name of the folder to consider
         measure:     measure to be used
+        coord_dir:   folder where all the data for the current model is stored
+        out_dir:     folder where the results should be stored
         visualize:   flag if we want to visualize the result
         width:       width of the histogram bins
 
     Returns:
-        Saved in the "results" folder
+        Saved in the "result" folder
 
     """
 
-    predicted_dir = "data/" + cond_name + "/"  # os.path.join(args.predicted, args.gesture)
+    predicted_dir = os.path.join(coord_dir, cond_name)
 
     measures = {
         'velocity': compute_velocity,
@@ -129,10 +135,9 @@ def make_histogram(cond_name, measure, visualize = True, width = 1):
     predicted_distances = []
     for predicted_file in predicted_files:
         # read the values and remove hips which are fixed
-        predicted = np.load(predicted_file)[:, 2:]
+        predicted_coords = np.load(predicted_file)[:, 2:]
 
-        predicted_distance = measures[measure](
-            predicted)  # [:, selected_joints]
+        predicted_distance = measures[measure](predicted_coords)  # [:, selected_joints]
 
         predicted_distances.append(predicted_distance)
 
@@ -161,8 +166,7 @@ def make_histogram(cond_name, measure, visualize = True, width = 1):
         predicted_line += '\n'
         predicted_out_lines.append(predicted_line)
 
-    predicted_out_dir  = "result/" + cond_name + "/"  # os.path.join(args.predicted, args.gesture)
-
+    predicted_out_dir = os.path.join(out_dir, cond_name)
 
     if visualize:
         sum = np.sum(predicted_total)
@@ -179,7 +183,7 @@ def make_histogram(cond_name, measure, visualize = True, width = 1):
 
     print('HMD ({}):'.format(measure))
     print('bins: {}'.format(bins))
-    print('predicted: {}'.format(predicted_total))
+    print('population: {}'.format(predicted_total))
 
 def main():
 
@@ -195,15 +199,20 @@ def main():
                         help='Joint subset to compute (if omitted, use all)')
     parser.add_argument('--visualize', '-v', action='store_true',
                         help='Visualize histograms')
-    parser.add_argument('--out', default='result',
+    parser.add_argument('--out_dir', default='resulting',
                         help='Directory to output the result')
     args = parser.parse_args()
 
+    # Make sure that data is stored in the correct folder
+    if not os.listdir(args.coords_dir):
+        print("--coords_dir argument is wrong. there is no data at the folder '", args.coords_dir, "'")
+        exit(-1)
+
     for cond_name in os.listdir(args.coords_dir):
         print("\nConsider", cond_name)
-        make_histogram(cond_name, args.measure, args.visualize, args.width)
+        make_histogram(cond_name, args.measure, args.coords_dir, args.out_dir, args.visualize, args.width)
 
-    print('\nMore detailed result was writen to the files in the "results" folder ')
+    print('\nMore detailed result was writen to the files in the ',  args.out_dir, ' folder ')
     print('')
 
 if __name__ == '__main__':

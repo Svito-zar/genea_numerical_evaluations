@@ -101,11 +101,12 @@ def save_result(lines, out_dir, measure):
         out_file.writelines(lines)
 
 
-def evaluate_folder(cond_name, measure):
+def evaluate_folder(cond_name, coord_dir, measure):
     """
     Calculate numerical measure for the coordinates in the given folder
     Args:
         cond_name:   name of the condition / folder to evaluate
+        coord_dir:   folder where all the data for the current model is stored
         measure:     measure to be used
 
     Returns:
@@ -113,7 +114,7 @@ def evaluate_folder(cond_name, measure):
 
     """
 
-    cond_dir = "data/" + cond_name + "/"
+    cond_dir = os.path.join(coord_dir, cond_name)
 
     cond_files = sorted(glob.glob(os.path.join(cond_dir, '*.npy')))
 
@@ -130,21 +131,21 @@ def evaluate_folder(cond_name, measure):
 
     predicted_out_lines = [','.join(['file']) + '\n']
 
-    predicted_errors = []
+    all_motion_stats = []
     for predicted_file in cond_files:
         predicted_coords = np.load(predicted_file)
 
         # flatten the values
         predicted_coords = np.reshape(predicted_coords, (predicted_coords.shape[0], -1))
 
-        predicted_error = measures[measure](predicted_coords)
+        current_motion_stats = measures[measure](predicted_coords)
 
-        predicted_errors.append(predicted_error)
+        all_motion_stats.append(current_motion_stats)
 
         basename = os.path.basename(predicted_file)
         predicted_line = basename
 
-        for ov in predicted_error:
+        for ov in current_motion_stats:
             predicted_line += ',' + str(ov)
 
         predicted_line += '\n'
@@ -152,13 +153,15 @@ def evaluate_folder(cond_name, measure):
         predicted_out_lines.append(predicted_line)
 
     predicted_average_line = 'Average'
-    predicted_avgs = np.mean(predicted_errors, axis=0)
 
-    predicted_samples = np.mean(predicted_errors, axis=1)
+    avgs_for_each_joint = np.mean(all_motion_stats, axis=0)
 
-    predicted_stds = np.std(predicted_samples, axis=0)
+    avgs_for_each_sequence = np.mean(all_motion_stats, axis=1)
 
-    for oa in predicted_avgs:
+    stds_over_sequences = np.std(avgs_for_each_sequence)
+    mean_over_sequences = np.mean(avgs_for_each_sequence)
+
+    for oa in avgs_for_each_joint:
         predicted_average_line += ',' + str(oa)
 
     predicted_out_lines.append(predicted_average_line)
@@ -167,7 +170,7 @@ def evaluate_folder(cond_name, measure):
 
     save_result(predicted_out_lines, predicted_out_dir, measure)
 
-    print('{:s}: {:.2f} +- {:.2F}'.format(cond_name, np.mean(predicted_errors), predicted_stds))
+    print('{:s}: {:.2f} +- {:.2F}'.format(cond_name, mean_over_sequences, stds_over_sequences))
 
 
 if __name__ == '__main__':
@@ -180,13 +183,20 @@ if __name__ == '__main__':
                         help='Measure to calculate (jerk or acceleration)')
     args = parser.parse_args()
 
+    # Make sure that data is stored in the correct folder
+    if not os.listdir(args.coords_dir):
+        print("--coords_dir argument is wrong. there is no data at the folder '", args.coords_dir, "'")
+        exit(-1)
+
     if args.measure == 'jerk':
         print('AJ:')
     elif args.measure == 'acceleration':
         print('AA:')
 
     for cond_name in os.listdir(args.coords_dir):
-        evaluate_folder(cond_name, args.measure)
+        if cond_name == "GT":
+            continue
+        evaluate_folder(cond_name, args.coords_dir, args.measure)
 
-    print('More detailed result was writen to the files in the "results" folder ')
+    print('More detailed result was writen to the files in the "result" folder ')
     print('')
