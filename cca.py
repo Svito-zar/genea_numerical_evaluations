@@ -38,7 +38,17 @@ def calculate_CCA_score(input_array_one, input_array_two):
     """
 
     # Define CCA model which considers the first CCA coefficient only
-    CCA_model = CCA(n_components=1)
+    CCA_model = CCA(n_components=1, max_iter=2000, scale=False)
+
+    # identify non-constant dimensions
+    std_of_array_one = np.std(input_array_one, axis = 0)
+    non_contant_dims_in_array_one = np.where(std_of_array_one > 1e-8)[0]
+    std_of_array_two = np.std(input_array_two, axis=0)
+    non_contant_dims_in_array_two = np.where(std_of_array_two > 1e-8)[0]
+
+    # use only non-constant dimensions
+    input_array_one = input_array_one[:, non_contant_dims_in_array_one] # * 1e8
+    input_array_two = input_array_two[:, non_contant_dims_in_array_two] # * 1e8
 
     # Fit CCA model to the given data
     CCA_model.fit(input_array_one, input_array_two)
@@ -49,10 +59,6 @@ def calculate_CCA_score(input_array_one, input_array_two):
     # Standartize arrays shape: make it np.array of floats, remove any dummy dimensions
     encoding_one = np.array(encoding_one, dtype='float64').squeeze()
     encoding_two = np.array(encoding_two, dtype='float64').squeeze()
-
-    # Bring from the order of e-12 to decent numbers
-    encoding_one = encoding_one * 1e10
-    encoding_two = encoding_two * 1e10
 
     # Calculate Pearson Correlation Coefficient (and p-value, which we don't use)
     r, p = stats.pearsonr(encoding_one, encoding_two)
@@ -71,15 +77,12 @@ if __name__ == '__main__':
     #X = [[1], [2], [3], [4], [1], [2], [3], [4], [1], [2], [3], [4], [1], [2], [3], [4]]
     #Y = [[2], [2], [2.01], [2.01], [2], [2], [2.01], [2.01], [2], [2], [2.01], [2.01], [2], [2], [2.01], [2.01]]
 
-    n = 200
-    X = np.random.randint(1,11,(n,1))
-    Y = np.random.randint(0,15,(n,1)) + X*0.5 + 7
+    n = 10000
+    X = np.random.randint(1,11,(n,42))
+    Y = np.random.randint(0,15,(n,42)) + X*0.005 + 7
 
     CCA_model = find_CCA_scaling_vectors(X,Y)
 
-    corr = calculate_CCA_score(CCA_model, X,Y)
+    corr = calculate_CCA_score(X,Y)
 
     print("CCA is : ", corr)
-
-    r, p = stats.pearsonr(X.squeeze(), Y.squeeze())
-    print("R      : ", r)
