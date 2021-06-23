@@ -11,7 +11,7 @@ def find_CCA_scaling_vectors(input_array_one, input_array_two):
             input_array_two: the second input array [T,D]
 
         Returns:
-            a, b: scaling vectors for the CCA transformation
+            cca_model: CCA model with scaling vectors for the CCA transformation
 
         """
 
@@ -25,20 +25,22 @@ def find_CCA_scaling_vectors(input_array_one, input_array_two):
 
 
 
-def calculate_CCA_score(input_array_one, input_array_two):
+def calculate_CCA_score(input_array_one, input_array_two, CCA_model = None):
     """
     Calculate CCA (Canonical Correlation Analysis) coefficient
     Args:
         input_array_one: the first input array [T,D]
         input_array_two: the second input array [T,D]
+        CCA_model: CCA model with scaling vectors for the CCA transformation
 
     Returns:
         r:  Pearson Correlation Coefficient after CCA transformation (scalar)
 
     """
 
-    # Define CCA model which considers the first CCA coefficient only
-    CCA_model = CCA(n_components=1, max_iter=2000, scale=False)
+    if CCA_model is None:
+        # Define CCA model which considers the first CCA coefficient only
+        CCA_model = CCA(n_components=1, max_iter=2000, scale=False)
 
     # identify non-constant dimensions
     std_of_array_one = np.std(input_array_one, axis = 0)
