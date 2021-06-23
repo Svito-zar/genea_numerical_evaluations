@@ -10,7 +10,7 @@ import glob
 import os
 import numpy as np
 
-from cca import calculate_CCA_score
+from cca import calculate_CCA_score, find_CCA_scaling_vectors
 
 
 def shorten(arr_one, arr_two):
@@ -92,10 +92,55 @@ def evaluate_folder(cond_name, coords_dir):
             all_predicted_frames = predicted_coords
             all_ground_tr_frames = original_coords
 
-    # calculate Global CCA value
-    global_cca_value = calculate_CCA_score(all_predicted_frames, all_ground_tr_frames)
+    # find CCA models
+    cca_model = find_CCA_scaling_vectors(all_predicted_frames, all_ground_tr_frames)
 
-    print('{:s} Global CCA value: {:.2f}'.format(cond_name, global_cca_value))
+    # calculate Global CCA value
+    #global_cca_value = calculate_CCA_score(all_predicted_frames, all_ground_tr_frames, cca_model)
+    #print('{:s} Global CCA value: {:.5f}'.format(cond_name, global_cca_value))
+
+
+    # calculate CCA value for each sequence
+    predicted_out_lines = [','.join(['file']) + '\n']
+
+    predicted_errors = []
+    for predicted_file, gt_file in zip(generated_files, gt_files):
+        # read and flatten the predicted values
+        predicted_coords = np.load(predicted_file)
+        predicted_coords = np.reshape(predicted_coords, (predicted_coords.shape[0], -1))
+
+        # read and flatten the ground truth values
+        original_coords = np.load(gt_file)
+        original_coords = np.reshape(original_coords, (original_coords.shape[0], -1))
+
+        # make sure sequences have the same length
+        predicted_coords, original_coords = shorten(predicted_coords, original_coords)
+
+        # calculate CCA value
+        current_cca_value = calculate_CCA_score(original_coords, predicted_coords, cca_model)
+
+        predicted_errors.append(current_cca_value)
+
+        basename = os.path.basename(predicted_file)
+        predicted_line = basename
+
+        predicted_line += ',' + str(current_cca_value) + '\n'
+
+        predicted_out_lines.append(predicted_line)
+
+    predicted_average_line = 'Average'
+    error_avgs = np.mean(predicted_errors, axis=0)
+    error_stds = np.std(predicted_errors, axis=0)
+
+    predicted_average_line += ',' + str(error_avgs)
+
+    predicted_out_lines.append(predicted_average_line)
+
+    predicted_out_dir = os.path.join("result", cond_name)
+
+    save_result(predicted_out_lines, predicted_out_dir)
+
+    print('{:s}: {:.2f} +- {:.2F}'.format(cond_name, np.mean(predicted_errors), error_stds))
 
 
 if __name__ == '__main__':
